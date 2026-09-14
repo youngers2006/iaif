@@ -92,7 +92,7 @@ agent.set_preference_distribution(C=[jnp.array([1.0, 1.0]), jnp.diag(jnp.array([
                                    sys_dependent_C=None,
                                    state_dependent_C=np.array([[0],[2]]),
                                    use_observation_preference=True)
-
+agent.params['ii_threshold'] = None
 agent.initialize()
 
 print("**** Starting simulations ****")
@@ -128,7 +128,7 @@ for num_plans in NUMBER_PLANS:
 
                     use_key, key = random.split(key)
                     t0 = time.time()
-                    bb, bb_after_rt, xx, oo, aa, aa_applied, lll, NEFE_PLAN, PRAGMATIC_PLAN, INFO_GAIN_PLAN, NEFES, PRAGMATICS, INFO_GAINS, ic_timesteps, ic_pred_error, IC_CRITERIA, bb_predicted, CUR_PRAGMATICS, CUR_PLAN = sim.run_iaif(numsteps=NUMSTEPS, verbose=False,  key=use_key)        
+                    bb, bb_after_rt, xx, oo, aa, aa_applied, lll, NEFE_PLAN, PRAGMATIC_PLAN, INFO_GAIN_PLAN, NEFES, PRAGMATICS, INFO_GAINS, ic_timesteps, ic_pred_error, IC_CRITERIA, bb_predicted, CUR_PRAGMATICS, CUR_PLAN, II_F, II_FIRED = sim.run_iaif(numsteps=NUMSTEPS, verbose=False,  key=use_key)        
                     t1 = time.time()
                     create_dir = os.path.dirname(save_path)
                     if not os.path.exists(create_dir):
@@ -163,7 +163,10 @@ for num_plans in NUMBER_PLANS:
                             'bb_predicted': bb_predicted,
                             'computation_time': t1 - t0,
                             'cur_pragmatics': CUR_PRAGMATICS,
-                            'cur_plan': CUR_PLAN
+                            'cur_plan': CUR_PLAN,
+                            'ii_threshold': agent.params['ii_threshold'],
+                            'ii_F': II_F,
+                            'ii_fired': II_FIRED
                         }, f)
                     print(f"Simulation for target {target_id}, DIV threshold {div_threshold}, EFE threshold {efe_threshold}, repeat {repeat} completed in {t1 - t0:.2f} seconds. Results saved to {save_path}.")
                 print(f"--- Completed simulations for target {target_id} ---")
