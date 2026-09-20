@@ -20,18 +20,19 @@ jax.config.update("jax_enable_x64", True)
 targets = pd.read_csv("./data/targets.csv", header=0).values[:, :2]
 start_target = np.array([0.   , 0.003])
 
-run_name = "iaif_ukf_obs_pref"
+run_name = "ii_trial_run"
 
 out_folder = f"./data/simulations/{run_name}"
 
 
 TARGETS = [0,1,2,3,4,5,6,7,8,9,10,11]
-DIV_THRESHOLDS = [None]#, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0]
+DIV_THRESHOLDS = [None, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0]
 EFE_THRESHOLDS = [None, 1.0]
+VFE_THRESHOLDS = 1e6
 NUMBER_PLANS = [5000] 
 MINIMAL_OPEN_LOOP_STEPS = 0
 REACTION_TIME = 0.1
-NUM_REPEATS = 10
+NUM_REPEATS = 5 # 10
 NUMSTEPS = 100
 
 target_id = TARGETS[0]
@@ -59,8 +60,12 @@ noise_params['observation_std'] = {'id': np.array([0,1,2,3])} # standard deviati
 agent = AIF_Agent(generative_model=mouse_cursor_model, noise_params=noise_params)
 
 # Reset beliefs
-initial_belief_sys_cov = jnp.diag((jnp.array([0.000001, 2.0]))**2)
-initial_belief_state_cov = jnp.diag((jnp.array([0.05, 0.001, 0.45, 0.02]))**2)
+initial_belief_sys_cov = jnp.diag(
+    (jnp.array([0.000001, 2.0]))**2
+)
+initial_belief_state_cov = jnp.diag(
+    (jnp.array([0.05, 0.001, 0.45, 0.02]))**2
+)
 
 
 agent.set_params_with_defaults(n_steps_o=30, 
@@ -82,7 +87,7 @@ agent.set_params_with_defaults(n_steps_o=30,
                 ic_efe_type='fixed'
                 )
 
-agent.set_initial_beliefs(initial_belief_state = [x0.at[2:].set(start_target),initial_belief_state_cov], 
+agent.set_initial_beliefs(initial_belief_state=[x0.at[2:].set(start_target),initial_belief_state_cov], 
                           initial_belief_noise=[jnp.log(jnp.array([0.001, 0.000001, 0.000001, 0.000001])), 0.00001*jnp.eye(agent.params['dim_noise'])],                          
                           initial_belief_sys=[sys_params, initial_belief_sys_cov])
 
@@ -92,7 +97,7 @@ agent.set_preference_distribution(C=[jnp.array([1.0, 1.0]), jnp.diag(jnp.array([
                                    sys_dependent_C=None,
                                    state_dependent_C=np.array([[0],[2]]),
                                    use_observation_preference=True)
-agent.params['ii_threshold'] = None
+agent.params['ii_threshold'] = VFE_THRESHOLDS
 agent.initialize()
 
 print("**** Starting simulations ****")
@@ -121,14 +126,17 @@ for num_plans in NUMBER_PLANS:
                 sim = AIF_Simulation(agent, mouse_cursor, noise_params)
                 for repeat in range(NUM_REPEATS):
 
-                    save_path = f"{out_folder}/target_{target_id}_nplans_{num_plans}_pred_{div_threshold}_prag_{efe_threshold}_rep_{repeat}.pkl"
+                    save_path = f"{out_folder}/target_{target_id}_nplans_{num_plans}_pred_{div_threshold}_prag_{efe_threshold}_inf_{VFE_THRESHOLDS}_rep_{repeat}.pkl"
                     if os.path.exists(save_path):
                         print(f"File {save_path} already exists. Skipping...")
                         continue
 
                     use_key, key = random.split(key)
                     t0 = time.time()
-                    bb, bb_after_rt, xx, oo, aa, aa_applied, lll, NEFE_PLAN, PRAGMATIC_PLAN, INFO_GAIN_PLAN, NEFES, PRAGMATICS, INFO_GAINS, ic_timesteps, ic_pred_error, IC_CRITERIA, bb_predicted, CUR_PRAGMATICS, CUR_PLAN, II_F, II_FIRED = sim.run_iaif(numsteps=NUMSTEPS, verbose=False,  key=use_key)        
+                    (bb, bb_after_rt, xx, oo, aa, aa_applied, lll, NEFE_PLAN, 
+                     PRAGMATIC_PLAN, INFO_GAIN_PLAN, NEFES, PRAGMATICS, INFO_GAINS, 
+                     ic_timesteps, ic_pred_error, IC_CRITERIA, bb_predicted, CUR_PRAGMATICS, 
+                     CUR_PLAN, II_F, II_FIRED) = sim.run_iaif(numsteps=NUMSTEPS, verbose=False,  key=use_key)        
                     t1 = time.time()
                     create_dir = os.path.dirname(save_path)
                     if not os.path.exists(create_dir):
