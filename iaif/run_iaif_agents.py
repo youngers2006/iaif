@@ -13,6 +13,7 @@ import numpy as np
 import pickle
 import time
 import pandas as pd
+from tqdm import tqdm
 
 jax.config.update("jax_enable_x64", True)
 
@@ -103,14 +104,14 @@ agent.initialize()
 print("**** Starting simulations ****")
 
 # Create AIF Simulation
-for num_plans in NUMBER_PLANS:
+for num_plans in tqdm(NUMBER_PLANS, "Plan Number", leave=True):
     agent.params['n_plans'] = num_plans
-    for div_threshold in DIV_THRESHOLDS:
+    for div_threshold in tqdm(DIV_THRESHOLDS, "Div Threshold", leave=False):
         agent.params['ic_div_threshold'] = div_threshold
-        for efe_threshold in EFE_THRESHOLDS:
+        for efe_threshold in tqdm(EFE_THRESHOLDS, "EFE Threshold", leave=False):
             agent.params['ic_efe_threshold'] = efe_threshold
             key = random.PRNGKey(42)
-            for target_id in TARGETS:
+            for target_id in tqdm(TARGETS, "Targets", leave=False):
                 # Create Generative Process (real system)
                 buttons = [start_target,targets[target_id]]
                 # Set x0 to the other button
