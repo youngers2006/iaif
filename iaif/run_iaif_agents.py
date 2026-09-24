@@ -21,19 +21,18 @@ jax.config.update("jax_enable_x64", True)
 targets = pd.read_csv("./data/targets.csv", header=0).values[:, :2]
 start_target = np.array([0.   , 0.003])
 
-run_name = "VFE_EFE_sweep"
+run_name = "VFE_EFE_sweep_5_restarts"
 
 out_folder = f"./data/simulations/{run_name}"
-
 
 TARGETS = [0,1,2,3,4,5,6,7,8,9,10,11]
 DIV_THRESHOLDS = [None] # [None, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0]
 EFE_THRESHOLDS = [None, 1.0]
-VFE_THRESHOLDS = [None, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9]
-NUMBER_PLANS = [1000] 
+VFE_THRESHOLDS = [None, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16]
+NUMBER_PLANS = [5000] 
 MINIMAL_OPEN_LOOP_STEPS = 0
 REACTION_TIME = 0.1
-NUM_REPEATS = 1 # 10
+NUM_REPEATS = 5 # 10
 NUMSTEPS = 100
 
 target_id = TARGETS[0]
