@@ -21,19 +21,19 @@ jax.config.update("jax_enable_x64", True)
 targets = pd.read_csv("./data/targets.csv", header=0).values[:, :2]
 start_target = np.array([0.   , 0.003])
 
-run_name = "ii_trial_run"
+run_name = "VFE_EFE_sweep"
 
 out_folder = f"./data/simulations/{run_name}"
 
 
 TARGETS = [0,1,2,3,4,5,6,7,8,9,10,11]
-DIV_THRESHOLDS = [None, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0]
+DIV_THRESHOLDS = [None] # [None, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0]
 EFE_THRESHOLDS = [None, 1.0]
-VFE_THRESHOLDS = 1e6
-NUMBER_PLANS = [5000] 
+VFE_THRESHOLDS = [None, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9]
+NUMBER_PLANS = [1000] 
 MINIMAL_OPEN_LOOP_STEPS = 0
 REACTION_TIME = 0.1
-NUM_REPEATS = 5 # 10
+NUM_REPEATS = 1 # 10
 NUMSTEPS = 100
 
 target_id = TARGETS[0]
@@ -111,73 +111,77 @@ for num_plans in tqdm(NUMBER_PLANS, "Plan Number", leave=True):
         for efe_threshold in tqdm(EFE_THRESHOLDS, "EFE Threshold", leave=False):
             agent.params['ic_efe_threshold'] = efe_threshold
             key = random.PRNGKey(42)
-            for target_id in tqdm(TARGETS, "Targets", leave=False):
-                # Create Generative Process (real system)
-                buttons = [start_target,targets[target_id]]
-                # Set x0 to the other button
-                x0 = jnp.array([buttons[0][0], 0.0, buttons[1][0], buttons[1][1]])
-                sys_params = jnp.array([k, d])
+            for vfe_threshold in tqdm(VFE_THRESHOLDS, "VFE Threshold", leave=False):
+                agent.params['ii_threshold'] = vfe_threshold
+                key = random.PRNGKey(42)
+                for target_id in tqdm(TARGETS, "Targets", leave=False):
+                    # Create Generative Process (real system)
+                    buttons = [start_target,targets[target_id]]
+                    # Set x0 to the other button
+                    x0 = jnp.array([buttons[0][0], 0.0, buttons[1][0], buttons[1][1]])
+                    sys_params = jnp.array([k, d])
 
-                mouse_cursor = Mouse_Cursor(x0, *sys_params, dt=dt)
+                    mouse_cursor = Mouse_Cursor(x0, *sys_params, dt=dt)
 
-                # Create Markov Blanket between real system and agent
-                noise_params = {}
-                noise_params['observation_std'] = {'id': np.array([0]), 'value': jnp.array([0.001])}# (0, 0.05) # standard deviation of the applied observation noise
+                    # Create Markov Blanket between real system and agent
+                    noise_params = {}
+                    noise_params['observation_std'] = {'id': np.array([0]), 'value': jnp.array([0.001])}# (0, 0.05) # standard deviation of the applied observation noise
 
-                sim = AIF_Simulation(agent, mouse_cursor, noise_params)
-                for repeat in range(NUM_REPEATS):
+                    sim = AIF_Simulation(agent, mouse_cursor, noise_params)
+                    for repeat in tqdm(range(NUM_REPEATS), "repeat", leave=False):
 
-                    save_path = f"{out_folder}/target_{target_id}_nplans_{num_plans}_pred_{div_threshold}_prag_{efe_threshold}_inf_{VFE_THRESHOLDS}_rep_{repeat}.pkl"
-                    if os.path.exists(save_path):
-                        print(f"File {save_path} already exists. Skipping...")
-                        continue
+                        save_path = f"{out_folder}/target_{target_id}_nplans_{num_plans}_pred_{div_threshold}_prag_{efe_threshold}_inf_{vfe_threshold}_rep_{repeat}.pkl"
+                        if os.path.exists(save_path):
+                            print(f"File {save_path} already exists. Skipping...")
+                            continue
 
-                    use_key, key = random.split(key)
-                    t0 = time.time()
-                    (bb, bb_after_rt, xx, oo, aa, aa_applied, lll, NEFE_PLAN, 
-                     PRAGMATIC_PLAN, INFO_GAIN_PLAN, NEFES, PRAGMATICS, INFO_GAINS, 
-                     ic_timesteps, ic_pred_error, IC_CRITERIA, bb_predicted, CUR_PRAGMATICS, 
-                     CUR_PLAN, II_F, II_FIRED) = sim.run_iaif(numsteps=NUMSTEPS, verbose=False,  key=use_key)        
-                    t1 = time.time()
-                    create_dir = os.path.dirname(save_path)
-                    if not os.path.exists(create_dir):
-                        os.makedirs(create_dir)
-                        print(f"Directory {create_dir} created.")
-                        
-                    with open(save_path, 'wb') as f:
-                        pickle.dump({
-                            'xx': xx,
-                            'oo': oo,
-                            'bb': bb,
-                            'bb_after_rt': bb_after_rt,
-                            'aa': aa,
-                            'aa_applied': aa_applied,
-                            'lll': lll,
-                            'nefe_plan': NEFE_PLAN,
-                            'pragmatic_plan': PRAGMATIC_PLAN,
-                            'info_gain_plan': INFO_GAIN_PLAN,
-                            'belief_noise': agent.belief_noise,
-                            'params': agent.params,
-                            'sys_params_real': sys_params,
-                            'noise_params_real': noise_params,
-                            'noise_params_model': noise_params,
-                            'buttons': buttons,
-                            'dt': dt,
-                            'ic_div_threshold': agent.params['ic_div_threshold'],
-                            'ic_efe_threshold': agent.params['ic_efe_threshold'],
-                            'reaction_time': agent.params['reaction_time'],
-                            'ic_timesteps': ic_timesteps,
-                            'ic_pred_error': ic_pred_error,
-                            'ic_criteria': IC_CRITERIA,
-                            'bb_predicted': bb_predicted,
-                            'computation_time': t1 - t0,
-                            'cur_pragmatics': CUR_PRAGMATICS,
-                            'cur_plan': CUR_PLAN,
-                            'ii_threshold': agent.params['ii_threshold'],
-                            'ii_F': II_F,
-                            'ii_fired': II_FIRED
-                        }, f)
-                    print(f"Simulation for target {target_id}, DIV threshold {div_threshold}, EFE threshold {efe_threshold}, repeat {repeat} completed in {t1 - t0:.2f} seconds. Results saved to {save_path}.")
-                print(f"--- Completed simulations for target {target_id} ---")
+                        use_key, key = random.split(key)
+                        t0 = time.time()
+                        (bb, bb_after_rt, xx, oo, aa, aa_applied, lll, NEFE_PLAN, 
+                        PRAGMATIC_PLAN, INFO_GAIN_PLAN, NEFES, PRAGMATICS, INFO_GAINS, 
+                        ic_timesteps, ic_pred_error, IC_CRITERIA, bb_predicted, CUR_PRAGMATICS, 
+                        CUR_PLAN, II_F, II_FIRED) = sim.run_iaif(numsteps=NUMSTEPS, verbose=False, key=use_key)        
+                        t1 = time.time()
+                        create_dir = os.path.dirname(save_path)
+                        if not os.path.exists(create_dir):
+                            os.makedirs(create_dir)
+                            print(f"Directory {create_dir} created.")
+                            
+                        with open(save_path, 'wb') as f:
+                            pickle.dump({
+                                'xx': xx,
+                                'oo': oo,
+                                'bb': bb,
+                                'bb_after_rt': bb_after_rt,
+                                'aa': aa,
+                                'aa_applied': aa_applied,
+                                'lll': lll,
+                                'nefe_plan': NEFE_PLAN,
+                                'pragmatic_plan': PRAGMATIC_PLAN,
+                                'info_gain_plan': INFO_GAIN_PLAN,
+                                'belief_noise': agent.belief_noise,
+                                'params': agent.params,
+                                'sys_params_real': sys_params,
+                                'noise_params_real': noise_params,
+                                'noise_params_model': noise_params,
+                                'buttons': buttons,
+                                'dt': dt,
+                                'ic_div_threshold': agent.params['ic_div_threshold'],
+                                'ic_efe_threshold': agent.params['ic_efe_threshold'],
+                                'reaction_time': agent.params['reaction_time'],
+                                'ic_timesteps': ic_timesteps,
+                                'ic_pred_error': ic_pred_error,
+                                'ic_criteria': IC_CRITERIA,
+                                'bb_predicted': bb_predicted,
+                                'computation_time': t1 - t0,
+                                'cur_pragmatics': CUR_PRAGMATICS,
+                                'cur_plan': CUR_PLAN,
+                                'ii_threshold': agent.params['ii_threshold'],
+                                'ii_F': II_F,
+                                'ii_fired': II_FIRED
+                            }, f)
+                        print(f"Simulation for target {target_id}, DIV threshold {div_threshold}, EFE threshold {efe_threshold}, VFE threshold {vfe_threshold}, repeat {repeat} completed in {t1 - t0:.2f} seconds. Results saved to {save_path}.")
+                    print(f"--- Completed simulations for target {target_id} ---")
+                print(f"--- Completed simulations for VFE {vfe_threshold} ---")
             print(f"=== Completed simulations for DIV threshold {div_threshold}, EFE threshold {efe_threshold} ===")
 print("**** All simulations completed. ****")
